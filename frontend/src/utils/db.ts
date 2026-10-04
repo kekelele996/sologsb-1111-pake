@@ -3,18 +3,20 @@ import type { DrillHole } from '../types/drill-hole';
 import type { DrillRun } from '../types/drill-run';
 import type { CoreBox } from '../types/core-box';
 import type { LithoLog } from '../types/litho-log';
+import type { SupplementOrder } from '../types/supplement';
 
 /** IndexedDB 库名（浏览器本地存储，无后端） */
 export const DB_NAME = 'gbdrillcore-db';
 
 /** 当前 schema 版本，与 db.version(n) 对应 */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 class DrillCoreDB extends Dexie {
   holes!: Table<DrillHole, string>;
   runs!: Table<DrillRun, string>;
   boxes!: Table<CoreBox, string>;
   lithos!: Table<LithoLog, string>;
+  supplements!: Table<SupplementOrder, string>;
   meta!: Table<{ key: string; value: string }, string>;
 
   constructor() {
@@ -46,6 +48,30 @@ class DrillCoreDB extends Dexie {
           .modify((row: LithoLog) => {
             if (typeof row.rqd !== 'number') {
               row.rqd = 0;
+            }
+          });
+      });
+
+    // v3：新增补勘订单表；旧数据的孔没有设计见矿层位，升级时按现有设计孔深回填
+    //（见矿层位按设计孔深下部 60%~孔底估算）。升级前请先「导出备份」。
+    this.version(3)
+      .stores({
+        holes: 'id, holeNo, rigNo, shift, startDate',
+        runs: 'id, runNo, holeId, fromDepth, toDepth, shift',
+        boxes: 'id, boxNo, holeId, shelfPos, boxedAt',
+        lithos: 'id, holeId, fromDepth, toDepth, [holeId+fromDepth], lithology',
+        supplements: 'id, holeId, holeNo, status, batchNo, createdAt',
+        meta: 'key',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('holes')
+          .toCollection()
+          .modify((row: DrillHole) => {
+            if (row.designOreFrom == null || row.designOreTo == null) {
+              const depth = Number(row.designDepth) || 0;
+              row.designOreFrom = Number((depth * 0.6).toFixed(1));
+              row.designOreTo = depth;
             }
           });
       });

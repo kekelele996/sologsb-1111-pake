@@ -20,9 +20,13 @@ export interface DrillHole {
   coordY: number;
   /** 孔口标高（m） */
   collarElevation: number;
-  /** 设计孔深（m） */
+  /** 设计孔深（m）· 地质设计组维护 */
   designDepth: number;
-  /** 终孔深度（m），未终孔时为 0 */
+  /** 设计见矿层位起深度（m）· 地质设计组维护，钻探班组不可改 */
+  designOreFrom: number;
+  /** 设计见矿层位止深度（m）· 地质设计组维护，钻探班组不可改 */
+  designOreTo: number;
+  /** 终孔深度（m），未终孔时为 0 · 钻探班组终孔报告维护 */
   finalDepth: number;
   /** 开孔日期 ISO */
   startDate: string;
@@ -52,6 +56,10 @@ export interface HoleProgress {
   finished: boolean;
   /** 是否未达设计（终孔深度 < 设计孔深） */
   belowDesign: boolean;
-  /** 是否需要补勘 */
+  /** 是否需要补勘（设计见矿层位未被实测回次覆盖） */
   needSupplement: boolean;
+  /** 设计见矿层位是否已被实测回次完整覆盖 */
+  oreCovered: boolean;
+  /** 设计见矿层位内未被回次覆盖的断档区间（补勘下发依据） */
+  oreGaps: Array<{ from: number; to: number }>;
 }

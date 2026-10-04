@@ -3,7 +3,9 @@ import type { DrillHole } from '../types/drill-hole';
 import type { DrillRun } from '../types/drill-run';
 import type { CoreBox } from '../types/core-box';
 import type { LithoLog } from '../types/litho-log';
+import type { SupplementOrder } from '../types/supplement';
 import { footageOf, recoveryOf } from './recovery';
+import { planReconciliation, SUPPLEMENT_CAPACITY } from './reconcile';
 
 const DAY = 86_400_000;
 const daysAgo = (n: number) => new Date(Date.now() - n * DAY).toISOString();
@@ -16,6 +18,8 @@ export const SEED_HOLES: DrillHole[] = [
     coordY: 3210880.2,
     collarElevation: 1246.5,
     designDepth: 300,
+    designOreFrom: 120,
+    designOreTo: 160,
     finalDepth: 0,
     startDate: daysAgo(26),
     rigNo: 'XY-1',
@@ -34,6 +38,8 @@ export const SEED_HOLES: DrillHole[] = [
     coordY: 3210940.8,
     collarElevation: 1251.2,
     designDepth: 250,
+    designOreFrom: 60,
+    designOreTo: 170,
     finalDepth: 250,
     startDate: daysAgo(48),
     endDate: daysAgo(12),
@@ -52,6 +58,8 @@ export const SEED_HOLES: DrillHole[] = [
     coordY: 3210810.4,
     collarElevation: 1238.8,
     designDepth: 400,
+    designOreFrom: 280,
+    designOreTo: 360,
     finalDepth: 320,
     startDate: daysAgo(60),
     endDate: daysAgo(5),
@@ -71,6 +79,8 @@ export const SEED_HOLES: DrillHole[] = [
     coordY: 3211020.6,
     collarElevation: 1260.4,
     designDepth: 180,
+    designOreFrom: 100,
+    designOreTo: 150,
     finalDepth: 180,
     startDate: daysAgo(34),
     endDate: daysAgo(18),
@@ -85,6 +95,8 @@ export const SEED_HOLES: DrillHole[] = [
     coordY: 3210765.1,
     collarElevation: 1233.6,
     designDepth: 220,
+    designOreFrom: 132,
+    designOreTo: 220,
     finalDepth: 0,
     startDate: daysAgo(9),
     rigNo: 'XY-1',
@@ -173,18 +185,27 @@ export async function seedIfEmpty(): Promise<void> {
   if (flag) {
     return;
   }
-  const [holeCount, runCount, boxCount, lithoCount] = await Promise.all([
+  const [holeCount, runCount, boxCount, lithoCount, supplementCount] = await Promise.all([
     db.holes.count(),
     db.runs.count(),
     db.boxes.count(),
     db.lithos.count(),
+    db.supplements.count(),
   ]);
 
-  await db.transaction('rw', db.holes, db.runs, db.boxes, db.lithos, db.meta, async () => {
+  await db.transaction('rw', [db.holes, db.runs, db.boxes, db.lithos, db.supplements, db.meta], async () => {
     if (holeCount === 0) await db.holes.bulkPut(SEED_HOLES);
     if (runCount === 0) await db.runs.bulkPut(SEED_RUNS);
     if (boxCount === 0) await db.boxes.bulkPut(SEED_BOXES);
     if (lithoCount === 0) await db.lithos.bulkPut(SEED_LITHOS);
+    if (supplementCount === 0) await db.supplements.bulkPut(buildSeedSupplements());
     await db.meta.put({ key: 'seeded', value: new Date().toISOString() });
   });
+}
+
+/** 示例补勘订单：与季度对账同一套逻辑，容量 2 台，故 2 下发 1 排队 */
+function buildSeedSupplements(): SupplementOrder[] {
+  const batchNo = 'YD-SEED';
+  const nowIso = daysAgo(2);
+  return planReconciliation(SEED_HOLES, SEED_RUNS, [], SUPPLEMENT_CAPACITY, batchNo, nowIso).orders;
 }

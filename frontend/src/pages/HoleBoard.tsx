@@ -8,9 +8,11 @@ import FilterBar from '../components/common/FilterBar';
 import { useHoleFilter } from '../hooks/useHoleFilter';
 import { useHoleStore, holeProgressList } from '../stores/holeStore';
 import { useRunStore, anomalyList } from '../stores/runStore';
+import { useSupplementStore, issuedOrders, queuedOrders } from '../stores/supplementStore';
 import { RIG_NOS, SHIFTS, type HoleProgress } from '../types/drill-hole';
 import type { RunAnomaly } from '../types/drill-run';
 import { isAnomaly } from '../utils/recovery';
+import { SUPPLEMENT_CAPACITY } from '../utils/reconcile';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -18,6 +20,7 @@ const { Title, Paragraph, Text } = Typography;
 export default function HoleBoard() {
   const holes = useHoleStore((s) => s.holes);
   const runs = useRunStore((s) => s.runs);
+  const orders = useSupplementStore((s) => s.orders);
   const filter = useHoleFilter();
 
   const visibleHoles = useMemo(() => filter.apply(holes), [holes, filter]);
@@ -32,6 +35,8 @@ export default function HoleBoard() {
   const inDrilling = progress.filter((item) => !item.finished).length;
   const finished = progress.filter((item) => item.finished).length;
   const supplement = progress.filter((item) => item.needSupplement);
+  const issued = issuedOrders(orders);
+  const queued = queuedOrders(orders);
   const avgRecovery = useMemo(() => {
     const totalFootage = runs.reduce((sum, run) => sum + run.footage, 0);
     const totalCore = runs.reduce((sum, run) => sum + run.coreLength, 0);
@@ -53,10 +58,10 @@ export default function HoleBoard() {
     },
     {
       title: '状态',
-      width: 150,
+      width: 170,
       render: (_, row) =>
         row.needSupplement ? (
-          <Tag color="red">未达设计 · 待补勘</Tag>
+          <Tag color="red">见矿层位未覆盖 · 待补勘</Tag>
         ) : row.finished ? (
           <Tag color="green">已终孔</Tag>
         ) : (
@@ -109,15 +114,24 @@ export default function HoleBoard() {
         </Col>
         <Col xs={12} md={6}>
           <StatBadge
-            label="未达设计待补勘"
+            label="待补勘（见矿层位未覆盖）"
             value={supplement.length}
             unit="个"
             status={supplement.length ? 'error' : 'success'}
-            hint="终孔深度小于设计孔深"
+            hint="设计见矿层位内回次断档"
           />
         </Col>
         <Col xs={12} md={6}>
           <StatBadge label="有效采取率" value={avgRecovery} unit="%" status={avgRecovery >= 75 ? 'success' : 'error'} hint="岩芯长度合计 / 进尺合计" />
+        </Col>
+        <Col xs={12} md={6}>
+          <StatBadge
+            label="补勘钻机占用"
+            value={issued.length}
+            unit={`/ ${SUPPLEMENT_CAPACITY} 台`}
+            status={issued.length >= SUPPLEMENT_CAPACITY ? 'error' : 'default'}
+            hint={queued.length ? `${queued.length} 孔排队顺延` : '空位可下发'}
+          />
         </Col>
       </Row>
 
@@ -126,12 +140,13 @@ export default function HoleBoard() {
           style={{ marginBottom: 16 }}
           type="error"
           showIcon
-          message={`未达设计孔深提醒：${supplement.length} 个钻孔终孔深度小于设计孔深，已计入待补勘`}
+          message={`见矿层位未覆盖提醒：${supplement.length} 个钻孔设计见矿层位被实测回次断档，已计入待补勘`}
           description={
             <Space wrap>
               {supplement.map((item) => (
                 <Tag key={item.hole.id} color="red">
-                  {item.hole.holeNo}：终孔 {item.hole.finalDepth}m / 设计 {item.hole.designDepth}m（差 {(item.hole.designDepth - item.hole.finalDepth).toFixed(1)}m）
+                  {item.hole.holeNo}：见矿 {item.hole.designOreFrom}~{item.hole.designOreTo}m，断档{' '}
+                  {item.oreGaps.map((gap) => `${gap.from}~${gap.to}`).join('、')}m
                 </Tag>
               ))}
             </Space>

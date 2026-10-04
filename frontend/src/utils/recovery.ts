@@ -102,19 +102,40 @@ export function reachedDepthOf(runs: DrillRun[]): number {
   return Number(runs.reduce((max, run) => Math.max(max, run.toDepth), 0).toFixed(2));
 }
 
-/** 钻孔进度派生：终孔深度 / 设计孔深 / 未达设计 / 待补勘 */
+/**
+ * 设计见矿层位是否已被实测回次完整覆盖。
+ * 季度对账拿「设计见矿层位」比对「实测回次」，覆盖不上（层位内有断档）即下发补勘。
+ * 未维护设计见矿层位（止深度不大于起深度）时视为不比对，返回已覆盖。
+ */
+export function oreHorizonCoverage(
+  hole: DrillHole,
+  runs: DrillRun[],
+): { covered: boolean; gaps: Array<{ from: number; to: number }> } {
+  const from = Number(hole.designOreFrom) || 0;
+  const to = Number(hole.designOreTo) || 0;
+  if (!(to > from)) return { covered: true, gaps: [] };
+  const gaps = gapsWithin(from, to, runs.filter((run) => run.holeId === hole.id));
+  return { covered: gaps.length === 0, gaps };
+}
+
+/** 钻孔进度派生：终孔深度 / 设计孔深 / 未达设计 / 待补勘（依据设计见矿层位覆盖） */
 export function buildHoleProgress(hole: DrillHole, runs: DrillRun[]): HoleProgress {
   const reachedDepth = Math.max(hole.finalDepth || 0, reachedDepthOf(runs));
   const designRatio = hole.designDepth > 0 ? Number(((reachedDepth / hole.designDepth) * 100).toFixed(1)) : 0;
   const finished = Boolean(hole.endDate);
   const belowDesign = finished && hole.finalDepth > 0 && hole.finalDepth < hole.designDepth;
+  const hasOreHorizon = (Number(hole.designOreTo) || 0) > (Number(hole.designOreFrom) || 0);
+  const ore = oreHorizonCoverage(hole, runs);
   return {
     hole,
     reachedDepth,
     designRatio,
     finished,
     belowDesign,
-    needSupplement: belowDesign,
+    oreCovered: ore.covered,
+    oreGaps: ore.gaps,
+    // 有设计见矿层位时以层位覆盖为准；无层位（旧数据回填前）退回未达设计判定
+    needSupplement: hasOreHorizon ? !ore.covered : belowDesign,
   };
 }
 
