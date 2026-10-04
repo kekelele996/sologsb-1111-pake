@@ -1,3 +1,4 @@
+import type { Table } from 'dexie';
 import { db, SCHEMA_VERSION } from './db';
 
 export interface BackupPayload {
@@ -8,15 +9,23 @@ export interface BackupPayload {
   runs: unknown[];
   boxes: unknown[];
   lithos: unknown[];
+  designs: unknown[];
+  reconRuns: unknown[];
+  reconItems: unknown[];
+  supplements: unknown[];
 }
 
 /** 汇总全部本地表为 JSON 备份（schema 迁移前先导出） */
 export async function buildBackup(): Promise<BackupPayload> {
-  const [holes, runs, boxes, lithos] = await Promise.all([
+  const [holes, runs, boxes, lithos, designs, reconRuns, reconItems, supplements] = await Promise.all([
     db.holes.toArray(),
     db.runs.toArray(),
     db.boxes.toArray(),
     db.lithos.toArray(),
+    db.designs.toArray(),
+    db.reconRuns.toArray(),
+    db.reconItems.toArray(),
+    db.supplements.toArray(),
   ]);
   return {
     app: 'gbdrillcore',
@@ -26,6 +35,10 @@ export async function buildBackup(): Promise<BackupPayload> {
     runs,
     boxes,
     lithos,
+    designs,
+    reconRuns,
+    reconItems,
+    supplements,
   };
 }
 
@@ -58,24 +71,31 @@ export function downloadCsv<T extends Record<string, unknown>>(
   downloadText(filename, `\ufeff${header}\n${body}`, 'text/csv');
 }
 
-/** 恢复 JSON 备份 */
-export async function importBackup(text: string): Promise<{ holes: number; runs: number; boxes: number; lithos: number }> {
+/** 恢复 JSON 备份（旧版备份缺少的表跳过，不清空） */
+export async function importBackup(text: string): Promise<Record<string, number>> {
   const payload = JSON.parse(text) as Partial<BackupPayload>;
   if (!payload || payload.app !== 'gbdrillcore') {
     throw new Error('备份文件格式不匹配（缺少 app=gbdrillcore 标记）');
   }
-  const counts = {
-    holes: payload.holes?.length ?? 0,
-    runs: payload.runs?.length ?? 0,
-    boxes: payload.boxes?.length ?? 0,
-    lithos: payload.lithos?.length ?? 0,
+  const tables: Record<string, Table<unknown, string>> = {
+    holes: db.holes,
+    runs: db.runs,
+    boxes: db.boxes,
+    lithos: db.lithos,
+    designs: db.designs,
+    reconRuns: db.reconRuns,
+    reconItems: db.reconItems,
+    supplements: db.supplements,
   };
-  await db.transaction('rw', db.holes, db.runs, db.boxes, db.lithos, async () => {
-    await Promise.all([db.holes.clear(), db.runs.clear(), db.boxes.clear(), db.lithos.clear()]);
-    if (payload.holes?.length) await db.holes.bulkPut(payload.holes as never[]);
-    if (payload.runs?.length) await db.runs.bulkPut(payload.runs as never[]);
-    if (payload.boxes?.length) await db.boxes.bulkPut(payload.boxes as never[]);
-    if (payload.lithos?.length) await db.lithos.bulkPut(payload.lithos as never[]);
+  const counts: Record<string, number> = {};
+  await db.transaction('rw', Object.values(tables), async () => {
+    for (const [key, table] of Object.entries(tables)) {
+      const rows = payload[key as keyof BackupPayload];
+      if (!Array.isArray(rows)) continue;
+      counts[key] = rows.length;
+      await table.clear();
+      if (rows.length) await table.bulkPut(rows);
+    }
   });
   return counts;
 }

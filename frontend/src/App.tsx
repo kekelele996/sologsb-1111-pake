@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Layout, Menu, Spin, Typography, App as AntApp, Button, Space } from 'antd';
 import {
+  AuditOutlined,
+  BookOutlined,
   CompassOutlined,
   DatabaseOutlined,
   DownloadOutlined,
@@ -15,16 +17,20 @@ import { useHoleStore } from './stores/holeStore';
 import { useRunStore } from './stores/runStore';
 import { useBoxStore } from './stores/boxStore';
 import { useLithoStore } from './stores/lithoStore';
+import { useDesignStore } from './stores/designStore';
+import { useReconStore } from './stores/reconStore';
 
 const { Header, Sider, Content, Footer } = Layout;
 const { Title, Text } = Typography;
 
 const MENU_ITEMS = [
   { key: '/', icon: <CompassOutlined />, label: <Link to="/">工作台</Link> },
+  { key: '/designs', icon: <BookOutlined />, label: <Link to="/designs">设计台账</Link> },
   { key: '/holes', icon: <DatabaseOutlined />, label: <Link to="/holes">钻孔台帐</Link> },
   { key: '/runs', icon: <BarsOutlined />, label: <Link to="/runs">回次记录</Link> },
   { key: '/boxes', icon: <ProfileOutlined />, label: <Link to="/boxes">岩芯箱</Link> },
   { key: '/lithology', icon: <ExperimentOutlined />, label: <Link to="/lithology">岩性编录</Link> },
+  { key: '/recon', icon: <AuditOutlined />, label: <Link to="/recon">季度对账</Link> },
 ];
 
 /** 应用外壳：左侧导航 + 顶部导出备份，负责一次性的本地数据装载 */
@@ -35,6 +41,8 @@ export default function App() {
   const hydrateRuns = useRunStore((s) => s.hydrate);
   const hydrateBoxes = useBoxStore((s) => s.hydrate);
   const hydrateLithos = useLithoStore((s) => s.hydrate);
+  const hydrateDesigns = useDesignStore((s) => s.hydrate);
+  const hydrateRecon = useReconStore((s) => s.hydrate);
   const location = useLocation();
 
   useEffect(() => {
@@ -42,7 +50,7 @@ export default function App() {
     (async () => {
       try {
         await seedIfEmpty();
-        await Promise.all([hydrateHoles(), hydrateRuns(), hydrateBoxes(), hydrateLithos()]);
+        await Promise.all([hydrateHoles(), hydrateRuns(), hydrateBoxes(), hydrateLithos(), hydrateDesigns(), hydrateRecon()]);
       } catch (error) {
         message.error(`本地数据装载失败：${(error as Error).message}`);
       } finally {
@@ -52,7 +60,7 @@ export default function App() {
     return () => {
       alive = false;
     };
-  }, [hydrateHoles, hydrateRuns, hydrateBoxes, hydrateLithos, message]);
+  }, [hydrateHoles, hydrateRuns, hydrateBoxes, hydrateLithos, hydrateDesigns, hydrateRecon, message]);
 
   const selectedKey =
     MENU_ITEMS.map((item) => item.key)

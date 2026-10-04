@@ -3,6 +3,7 @@ import type { DrillHole } from '../types/drill-hole';
 import type { DrillRun } from '../types/drill-run';
 import type { CoreBox } from '../types/core-box';
 import type { LithoLog } from '../types/litho-log';
+import type { HoleDesign } from '../types/design';
 import { footageOf, recoveryOf } from './recovery';
 
 const DAY = 86_400_000;
@@ -167,24 +168,39 @@ export const SEED_LITHOS: LithoLog[] = [
   { id: 'litho-018', holeId: 'hole-005', fromDepth: 11, toDepth: 45, lithology: '花岗闪长岩', color: '灰白色', alteration: '硅化', mineralization: '无', rqd: 87, sampleNo: 'YP-2405-01', logger: '吴倩' },
 ];
 
+/**
+ * 示例设计台账（地质设计组那份资料，与台帐分开存放）。
+ * 层位与示例回次对照：ZK-2402 / ZK-2404 全覆盖；ZK-2401 差 155~160m、
+ * ZK-2403 差 320~340m、ZK-2405 差 45~220m，首次对账会下发 3 条补勘（容量 2，1 条排队顺延）。
+ */
+export const SEED_DESIGNS: HoleDesign[] = [
+  { id: 'design-001', holeNo: 'ZK-2401', designDepth: 300, oreFrom: 120, oreTo: 160, updatedAt: daysAgo(60), remark: '设计见矿层位 120~160m' },
+  { id: 'design-002', holeNo: 'ZK-2402', designDepth: 250, oreFrom: 62, oreTo: 168, updatedAt: daysAgo(60) },
+  { id: 'design-003', holeNo: 'ZK-2403', designDepth: 400, oreFrom: 200, oreTo: 340, updatedAt: daysAgo(58), remark: '主矿体深部延伸段，孔内坍塌提前终孔' },
+  { id: 'design-004', holeNo: 'ZK-2404', designDepth: 180, oreFrom: 10, oreTo: 180, updatedAt: daysAgo(58) },
+  { id: 'design-005', holeNo: 'ZK-2405', designDepth: 220, oreFrom: 11, oreTo: 220, updatedAt: daysAgo(9), remark: '在钻，层位尚未验证' },
+];
+
 /** 首次打开（表内无数据）时写入示例数据；已有数据则不动 */
 export async function seedIfEmpty(): Promise<void> {
   const flag = await db.meta.get('seeded');
   if (flag) {
     return;
   }
-  const [holeCount, runCount, boxCount, lithoCount] = await Promise.all([
+  const [holeCount, runCount, boxCount, lithoCount, designCount] = await Promise.all([
     db.holes.count(),
     db.runs.count(),
     db.boxes.count(),
     db.lithos.count(),
+    db.designs.count(),
   ]);
 
-  await db.transaction('rw', db.holes, db.runs, db.boxes, db.lithos, db.meta, async () => {
+  await db.transaction('rw', [db.holes, db.runs, db.boxes, db.lithos, db.designs, db.meta], async () => {
     if (holeCount === 0) await db.holes.bulkPut(SEED_HOLES);
     if (runCount === 0) await db.runs.bulkPut(SEED_RUNS);
     if (boxCount === 0) await db.boxes.bulkPut(SEED_BOXES);
     if (lithoCount === 0) await db.lithos.bulkPut(SEED_LITHOS);
+    if (designCount === 0) await db.designs.bulkPut(SEED_DESIGNS);
     await db.meta.put({ key: 'seeded', value: new Date().toISOString() });
   });
 }

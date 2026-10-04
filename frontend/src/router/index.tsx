@@ -2,10 +2,12 @@ import type { RouteObject } from 'react-router-dom';
 import { Button, Result } from 'antd';
 import App from '../App';
 import HoleBoard from '../pages/HoleBoard';
+import DesignLedger from '../pages/DesignLedger';
 import HoleList from '../pages/HoleList';
 import RunLog from '../pages/RunLog';
 import CoreBoxList from '../pages/CoreBoxList';
 import LithoEditor from '../pages/LithoEditor';
+import ReconCenter from '../pages/ReconCenter';
 
 function NotFound() {
   return (
@@ -22,17 +24,19 @@ function NotFound() {
   );
 }
 
-/** 全部路由：工作台 + 钻孔台帐 / 回次记录 / 岩芯箱 / 岩性编录 */
+/** 全部路由：工作台 + 设计台账 / 钻孔台帐 / 回次记录 / 岩芯箱 / 岩性编录 / 季度对账 */
 export const routes: RouteObject[] = [
   {
     path: '/',
     element: <App />,
     children: [
       { index: true, element: <HoleBoard /> },
+      { path: 'designs', element: <DesignLedger /> },
       { path: 'holes', element: <HoleList /> },
       { path: 'runs', element: <RunLog /> },
       { path: 'boxes', element: <CoreBoxList /> },
       { path: 'lithology', element: <LithoEditor /> },
+      { path: 'recon', element: <ReconCenter /> },
       { path: '*', element: <NotFound /> },
     ],
   },
